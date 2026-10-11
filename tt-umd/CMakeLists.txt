@@ -58,6 +58,8 @@ if(COMMAND TT_ENABLE_UNITY_BUILD)
     tt_enable_unity_build(tt-umd)
 endif()
 
+target_compile_options(tt-umd PRIVATE -fno-omit-frame-pointer)
+
 target_sources(
     tt-umd
     PRIVATE
