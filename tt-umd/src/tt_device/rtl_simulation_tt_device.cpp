@@ -26,8 +26,10 @@
 #include "tt-umd/arch/architecture_implementation.hpp"
 #include "tt-umd/chip_helpers/simulation_sysmem_manager.hpp"
 #include "tt-umd/chip_helpers/simulation_tlb_allocator.hpp"
+#include "tt-umd/coordinates/att/att_resolver.hpp"
 #include "tt-umd/coordinates/att/configs/grendel_qsr1_att_map.hpp"
 #include "tt-umd/coordinates/att/configs/horizon_2x3_att_map.hpp"
+#include "tt-umd/coordinates/att/configs/horizon_x2_att_map.hpp"
 #include "tt-umd/pcie/tlb_window.hpp"
 #include "tt-umd/simulation/rtl_sim_communicator.hpp"
 #include "tt-umd/simulation/simulation_chip.hpp"
@@ -51,15 +53,22 @@ namespace {
 // carries an ATT, and the Quasar models that do not would be sent addresses they cannot route.
 constexpr const char* NOC_ATT_MAP_ENV_VAR = "TT_UMD_NOC_ATT";
 
-// The maps this build carries, by the name TT_UMD_NOC_ATT gives them.
+// The maps this build carries, by the name TT_UMD_NOC_ATT gives them. A map has one table for
+// every device, or one per device id of the build's ip_layout.yaml when each device of a
+// multi-device system has its own flat addresses.
 struct NamedAttMap {
     const char* name;
-    const att::MapData* map;
+    att::Table<const att::MapData*> maps;
 };
 
+constexpr const att::MapData* GRENDEL_QSR1_MAPS[] = {&att::GRENDEL_QSR1_MAP};
+constexpr const att::MapData* HORIZON_2X3_MAPS[] = {&att::HORIZON_2X3_MAP};
+constexpr const att::MapData* HORIZON_X2_MAPS[] = {&att::HORIZON_X2_DEV0_MAP, &att::HORIZON_X2_DEV1_MAP};
+
 constexpr NamedAttMap ATT_MAPS[] = {
-    {"grendel_qsr1", &att::GRENDEL_QSR1_MAP},
-    {"horizon_2x3", &att::HORIZON_2X3_MAP},
+    {"grendel_qsr1", GRENDEL_QSR1_MAPS},
+    {"horizon_2x3", HORIZON_2X3_MAPS},
+    {"horizon_x2", HORIZON_X2_MAPS},
 };
 
 }  // namespace
@@ -127,10 +136,12 @@ RtlSimulationTTDevice::RtlSimulationTTDevice(
         chip_id,
         num_host_mem_channels,
         std::nullopt,
+        std::nullopt,
         std::make_unique<RtlSimCommunicator>(simulator_directory)) {}
 
 RtlSimulationTTDevice::RtlSimulationTTDevice(
     const RtlSimSocket& socket,
+    const IpLayoutDevice& layout_device,
     const std::filesystem::path& simulator_directory,
     const SocDescriptor& soc_descriptor,
     ChipId chip_id,
@@ -141,6 +152,7 @@ RtlSimulationTTDevice::RtlSimulationTTDevice(
         chip_id,
         num_host_mem_channels,
         socket,
+        layout_device,
         std::make_unique<RtlSimCommunicator>(socket)) {}
 
 RtlSimulationTTDevice::RtlSimulationTTDevice(
@@ -149,6 +161,7 @@ RtlSimulationTTDevice::RtlSimulationTTDevice(
     ChipId chip_id,
     int num_host_mem_channels,
     std::optional<RtlSimSocket> socket,
+    std::optional<IpLayoutDevice> layout_device,
     std::unique_ptr<RtlSimCommunicator> communicator) :
     SimulationTTDevice(
         std::make_unique<SimulationTTDeviceModel>(soc_descriptor),
@@ -156,7 +169,8 @@ RtlSimulationTTDevice::RtlSimulationTTDevice(
         std::make_unique<SimulationSysmemManager>(
             num_host_mem_channels, soc_descriptor.arch, static_cast<uint32_t>(chip_id))),
     session_socket_(std::move(socket)),
-    communicator_(std::move(communicator)) {
+    communicator_(std::move(communicator)),
+    layout_device_(std::move(layout_device)) {
     log_info(tt::LogEmulationDriver, "Instantiating RTL simulation TTDevice");
     set_soc_descriptor(soc_descriptor);
     setup_noc_address_resolver();
@@ -201,8 +215,42 @@ void RtlSimulationTTDevice::setup_noc_address_resolver() {
             *map_name,
             fmt::join(names, ", ")));
 
-    noc_address_resolver_ = std::make_unique<att::EndpointResolver>(*known->map);
+    // A map with one table serves every device: its addresses are relative to the device (as
+    // horizon_2x3's are). A map with a table per device is indexed by the device's id.
+    const uint32_t device = layout_device_.has_value() ? static_cast<uint32_t>(layout_device_->device) : 0;
+    const uint32_t table = known->maps.size() == 1 ? 0 : device;
+    UMD_ASSERT(
+        table < known->maps.size(),
+        error::RuntimeError,
+        fmt::format(
+            "{} names ATT map '{}', which has tables for {} devices; this is device {}.",
+            NOC_ATT_MAP_ENV_VAR,
+            *map_name,
+            known->maps.size(),
+            device));
+
+    noc_address_resolver_ = std::make_unique<att::EndpointResolver>(*known->maps[table]);
     global_address_mode_ = true;
+}
+
+std::vector<AccessPointId> RtlSimulationTTDevice::get_access_points() const {
+    return layout_device_.has_value() ? layout_device_->access_points : std::vector<AccessPointId>{};
+}
+
+std::optional<uint64_t> RtlSimulationTTDevice::get_flat_address(
+    AccessPointId access_point, CoreCoord core, WindowFlags flags, IoOrdering ordering, uint64_t offset) const {
+    const std::vector<AccessPointId> access_points = get_access_points();
+    UMD_ASSERT(
+        std::find(access_points.begin(), access_points.end(), access_point) != access_points.end(),
+        error::RuntimeError,
+        fmt::format("Access point {} is not one of this device's.", static_cast<uint32_t>(access_point)));
+    // Without a map (TT_UMD_NOC_ATT) the device has no flat addresses. Both of a device's access
+    // points sit behind its one window in the maps carried today, so the address does not depend on
+    // which one is named.
+    if (noc_address_resolver_ == nullptr) {
+        return std::nullopt;
+    }
+    return att::resolve_io_window(*noc_address_resolver_, get_soc_descriptor(), core, flags, ordering, offset);
 }
 
 bool RtlSimulationTTDevice::should_use_cached_tlb_window() {

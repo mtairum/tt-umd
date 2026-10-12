@@ -113,6 +113,8 @@ std::map<ChipId, std::unique_ptr<TTDevice>> create_rtl_sim_ip_layout_tt_devices(
     auto session = std::make_shared<RtlSimSession>(simulator_directory, sockets, launch_simulator);
     session->start();
 
+    const std::map<IpDeviceId, std::vector<AccessPointId>> layout_devices = layout.get_devices();
+
     // The build's ATT programming, if it ships one, goes in before any core runs.
     const std::optional<RtlSimAttProgram> att_program = RtlSimAttProgram::load(simulator_directory);
 
@@ -122,6 +124,7 @@ std::map<ChipId, std::unique_ptr<TTDevice>> create_rtl_sim_ip_layout_tt_devices(
             layout.get_soc_descriptor(static_cast<IpDeviceId>(device_id)).string()));
         auto device = std::make_unique<RtlSimulationTTDevice>(
             RtlSimSocket(session, socket_of_chip.at(chip_id)),
+            IpLayoutDevice{static_cast<IpDeviceId>(device_id), layout_devices.at(static_cast<IpDeviceId>(device_id))},
             simulator_directory,
             soc_descriptor,
             chip_id,

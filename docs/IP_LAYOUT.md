@@ -79,6 +79,15 @@ devices:
 
 A build with an `ip_layout.yaml` opens as one chip per device: `create_rtl_sim_ip_layout_tt_devices()` starts one `RtlSimSession` over the devices' sockets and creates one `RtlSimulationTTDevice` per device, each on its device's socket and with its device's SoC descriptor. A device may list several access points; its IO goes over the first one, and only that one's socket is served. Devices whose first access points name the same `host_access` share that socket: its requests take one turn at a time, and the remote is told to exit once the last of them closes.
 
+## Flat addresses for fabric
+
+With an ATT map named in `TT_UMD_NOC_ATT`, a device has flat addresses: the global addresses another device's kernels use to reach its tiles. Fabric reads them, by access point; the device's own IO is unaffected.
+
+- `TTDevice::get_access_points()` lists the access points the device owns, as ordinals of `ip_layout.yaml`.
+- `TTDevice::get_flat_address(access_point, core, flags, ordering, offset)` gives the flat address of `offset` in `core`'s memory, for an IoWindow with `flags` (`WindowFlags`) and `ordering` (`IoOrdering`). It is `nullopt` when the device has no map, or the map has no window for those flags. The maps carried today have unicast windows only.
+
+A map can hold one table per device, chosen by the device's id: `horizon_x2` (two whole Horizon devices behind linked crossbars, aether `horizon_x2`) gives device 0 its L1 at `0x4000_0000` and device 1 at `0x5000_0000`. Both of a device's access points sit behind its one window there, so they give the same address.
+
 ## One process or several
 
 A build with an `ip_layout.yaml` opens as one chip per device. A process opens the devices selected by `ClusterOptions::target_devices`, or else by `TT_VISIBLE_DEVICES`, renumbered from 0, and serves only their sockets.

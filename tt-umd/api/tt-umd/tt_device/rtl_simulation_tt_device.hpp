@@ -12,12 +12,14 @@
 #include <memory>
 #include <mutex>
 #include <optional>
+#include <vector>
 
 #include "tt-umd/chip_helpers/simulation_sysmem_manager.hpp"
 #include "tt-umd/chip_helpers/simulation_tlb_allocator.hpp"
 #include "tt-umd/simulation/rtl_sim_communicator.hpp"
 #include "tt-umd/simulation/rtl_sim_session.hpp"
 #include "tt-umd/soc_descriptor.hpp"
+#include "tt-umd/topology/ip_layout.hpp"
 #include "tt-umd/tt_device/simulation_tt_device.hpp"
 #include "tt-umd/types/cluster_descriptor_types.hpp"
 #include "tt-umd/types/core_coordinates.hpp"
@@ -33,6 +35,12 @@ class SimulationClient;
 class SocDescriptor;
 class TlbWindow;
 
+/** Where a device sits in its IP's layout: its id and the access points it owns, first one first. */
+struct IpLayoutDevice {
+    IpDeviceId device;
+    std::vector<AccessPointId> access_points;
+};
+
 class RtlSimulationTTDevice : public SimulationTTDevice {
 public:
     RtlSimulationTTDevice(
@@ -42,11 +50,13 @@ public:
         int num_host_mem_channels = 0);
 
     /**
-     * Talk over @p socket, one access point of a started RtlSimSession. The socket keeps the session
-     * alive; several devices can share one session, each on its own socket.
+     * Talk over @p socket, one access point of a started RtlSimSession, as device @p layout_device of
+     * the build's ip_layout.yaml. The socket keeps the session alive; several devices can share one
+     * session, and devices whose first access points name one socket share it.
      */
     RtlSimulationTTDevice(
         const RtlSimSocket& socket,
+        const IpLayoutDevice& layout_device,
         const std::filesystem::path& simulator_directory,
         const SocDescriptor& soc_descriptor,
         ChipId chip_id,
@@ -73,6 +83,15 @@ public:
 
     RtlSimCommunicator* get_communicator() { return communicator_.get(); }
 
+    std::vector<AccessPointId> get_access_points() const override;
+
+    std::optional<uint64_t> get_flat_address(
+        AccessPointId access_point,
+        CoreCoord core,
+        WindowFlags flags,
+        IoOrdering ordering,
+        uint64_t offset = 0) const override;
+
 protected:
     SimulationBackendType backend_type() const override { return SimulationBackendType::RTL; }
 
@@ -85,7 +104,8 @@ protected:
     bool should_use_cached_tlb_window() override;
 
 private:
-    // Install the flat-address resolver when the environment names an ATT map. Host mode only: a
+    // Install the flat-address resolver when the environment names an ATT map: the map for this
+    // device's id, or device 0 outside an ip_layout.yaml. Host mode only: a
     // client hands the host a translated coordinate and a core-local address, and the host resolves
     // it, so resolving here as well would fold the coordinate in twice.
     void setup_noc_address_resolver();
@@ -108,6 +128,7 @@ private:
         ChipId chip_id,
         int num_host_mem_channels,
         std::optional<RtlSimSocket> socket,
+        std::optional<IpLayoutDevice> layout_device,
         std::unique_ptr<RtlSimCommunicator> communicator);
 
     // Host-mode backend bring-up (communicator init, sysmem callbacks, TLB setup). Takes the
@@ -125,5 +146,8 @@ private:
     std::optional<RtlSimSocket> session_socket_;
 
     std::unique_ptr<RtlSimCommunicator> communicator_;
+
+    // This device's place in the build's ip_layout.yaml, when it has one.
+    std::optional<IpLayoutDevice> layout_device_;
 };
 }  // namespace tt::umd
