@@ -4,6 +4,8 @@
 
 #include "tt-umd/tt_device/simulation_device_factory.hpp"
 
+#include <algorithm>
+#include <map>
 #include <string>
 #include <tt-logger/tt-logger.hpp>
 #include <vector>
@@ -96,12 +98,17 @@ std::map<ChipId, std::unique_ptr<TTDevice>> create_rtl_sim_ip_layout_tt_devices(
     bool launch_simulator) {
     const RtlSimIpLayout layout(simulator_directory);
 
-    // One socket per device, in chip order: a device's IO goes over its first access point, and only
-    // that socket is served.
+    // A device's IO goes over its first access point, and only those sockets are served, each once:
+    // devices whose first access points name the same socket share it, and take turns on its channel.
     std::vector<std::string> sockets;
-    sockets.reserve(chips.size());
+    std::map<ChipId, size_t> socket_of_chip;
     for (const auto &[chip_id, device_id] : chips) {
-        sockets.push_back(layout.get_device_host_access(static_cast<IpDeviceId>(device_id)));
+        const std::string &host_access = layout.get_device_host_access(static_cast<IpDeviceId>(device_id));
+        const auto it = std::find(sockets.begin(), sockets.end(), host_access);
+        socket_of_chip[chip_id] = static_cast<size_t>(it - sockets.begin());
+        if (it == sockets.end()) {
+            sockets.push_back(host_access);
+        }
     }
     auto session = std::make_shared<RtlSimSession>(simulator_directory, sockets, launch_simulator);
     session->start();
@@ -110,12 +117,15 @@ std::map<ChipId, std::unique_ptr<TTDevice>> create_rtl_sim_ip_layout_tt_devices(
     const std::optional<RtlSimAttProgram> att_program = RtlSimAttProgram::load(simulator_directory);
 
     std::map<ChipId, std::unique_ptr<TTDevice>> devices;
-    size_t socket = 0;
     for (const auto &[chip_id, device_id] : chips) {
         const SocDescriptor soc_descriptor(std::make_shared<SocArchDescriptor>(
             layout.get_soc_descriptor(static_cast<IpDeviceId>(device_id)).string()));
         auto device = std::make_unique<RtlSimulationTTDevice>(
-            RtlSimSocket(session, socket++), simulator_directory, soc_descriptor, chip_id, num_host_mem_channels);
+            RtlSimSocket(session, socket_of_chip.at(chip_id)),
+            simulator_directory,
+            soc_descriptor,
+            chip_id,
+            num_host_mem_channels);
         if (att_program.has_value()) {
             att_program->apply(static_cast<IpDeviceId>(device_id), *device->get_communicator());
         }
