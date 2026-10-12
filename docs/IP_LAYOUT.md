@@ -77,7 +77,7 @@ devices:
 
 ## Opening a layout
 
-A build with an `ip_layout.yaml` opens as one chip per device: `create_rtl_sim_ip_layout_tt_devices()` starts one `RtlSimSession` over the devices' sockets and creates one `RtlSimulationTTDevice` per device, each on its device's socket and with its device's SoC descriptor. For now a device must have exactly one access point.
+A build with an `ip_layout.yaml` opens as one chip per device: `create_rtl_sim_ip_layout_tt_devices()` starts one `RtlSimSession` over the devices' sockets and creates one `RtlSimulationTTDevice` per device, each on its device's socket and with its device's SoC descriptor. A device may list several access points; its IO goes over the first one, and only that one's socket is served.
 
 ## One process or several
 

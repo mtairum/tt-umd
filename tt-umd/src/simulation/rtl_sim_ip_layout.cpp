@@ -92,6 +92,10 @@ const std::string& RtlSimIpLayout::get_host_access(AccessPointId access_point) c
     return access_points_.at(static_cast<uint32_t>(access_point)).host_access;
 }
 
+const std::string& RtlSimIpLayout::get_device_host_access(IpDeviceId device) const {
+    return get_host_access(devices_.at(device).front());
+}
+
 const std::filesystem::path& RtlSimIpLayout::get_soc_descriptor(IpDeviceId device) const {
     return soc_descriptors_.at(device);
 }

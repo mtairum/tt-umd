@@ -51,6 +51,7 @@ TEST(RtlSimIpLayout, OneDeviceTwoAccessPoints) {
     EXPECT_EQ(layout.get_devices(), (Devices{{DEV0, {AP0, AP1}}}));
     EXPECT_EQ(layout.get_host_access(AP0), "col0");
     EXPECT_EQ(layout.get_host_access(AP1), "col1");
+    EXPECT_EQ(layout.get_device_host_access(DEV0), "col0");
     EXPECT_EQ(layout.get_soc_descriptor(DEV0), soc_descriptor_of("one_device_two_access_points"));
 
     EXPECT_EQ(layout.get_location(AP0).coord, tt_xy_pair(0, 2));

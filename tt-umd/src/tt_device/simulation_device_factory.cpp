@@ -96,22 +96,12 @@ std::map<ChipId, std::unique_ptr<TTDevice>> create_rtl_sim_ip_layout_tt_devices(
     bool launch_simulator) {
     const RtlSimIpLayout layout(simulator_directory);
 
-    const std::map<IpDeviceId, std::vector<AccessPointId>> layout_devices = layout.get_devices();
-
-    // One socket per device, in chip order.
+    // One socket per device, in chip order: a device's IO goes over its first access point, and only
+    // that socket is served.
     std::vector<std::string> sockets;
+    sockets.reserve(chips.size());
     for (const auto &[chip_id, device_id] : chips) {
-        const std::vector<AccessPointId> &access_points = layout_devices.at(static_cast<IpDeviceId>(device_id));
-        // A TTDevice talks over one socket; spreading a device over several isn't supported yet.
-        UMD_ASSERT(
-            access_points.size() == 1,
-            error::RuntimeError,
-            fmt::format(
-                "{}: device {} has {} access points; a device can use only one for now.",
-                (simulator_directory / RtlSimIpLayout::FILE_NAME).string(),
-                device_id,
-                access_points.size()));
-        sockets.push_back(layout.get_host_access(access_points.front()));
+        sockets.push_back(layout.get_device_host_access(static_cast<IpDeviceId>(device_id)));
     }
     auto session = std::make_shared<RtlSimSession>(simulator_directory, sockets, launch_simulator);
     session->start();

@@ -35,6 +35,9 @@ public:
 
     const std::string& get_host_access(AccessPointId access_point) const;
 
+    /** The host_access a device's IO goes over: its first access point's. The others are not used. */
+    const std::string& get_device_host_access(IpDeviceId device) const;
+
     const std::filesystem::path& get_soc_descriptor(IpDeviceId device) const;
 
 private:
