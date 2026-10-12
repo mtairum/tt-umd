@@ -49,15 +49,17 @@ void TTSimProtocol::write_data(const void* src, tt_xy_pair core, uint64_t addr, 
     device_->noc_write_translated(core, addr, src, size);
 }
 
-void TTSimProtocol::read_ctrl(void* dst, tt_xy_pair core, uint64_t addr, size_t size, NocId noc_id) {
-    for_each_register_access(addr, size, [&](uint64_t reg_addr, size_t offset) {
-        read_data(static_cast<uint8_t*>(dst) + offset, core, reg_addr, sizeof(uint32_t), noc_id);
+void TTSimProtocol::read_ctrl(
+    void* dst, tt_xy_pair core, uint64_t addr, size_t size, NocId noc_id, RegisterAccessWidth width) {
+    for_each_register_access(addr, size, width, [&](uint64_t reg_addr, size_t offset) {
+        read_data(static_cast<uint8_t*>(dst) + offset, core, reg_addr, register_access_size(width), noc_id);
     });
 }
 
-void TTSimProtocol::write_ctrl(const void* src, tt_xy_pair core, uint64_t addr, size_t size, NocId noc_id) {
-    for_each_register_access(addr, size, [&](uint64_t reg_addr, size_t offset) {
-        write_data(static_cast<const uint8_t*>(src) + offset, core, reg_addr, sizeof(uint32_t), noc_id);
+void TTSimProtocol::write_ctrl(
+    const void* src, tt_xy_pair core, uint64_t addr, size_t size, NocId noc_id, RegisterAccessWidth width) {
+    for_each_register_access(addr, size, width, [&](uint64_t reg_addr, size_t offset) {
+        write_data(static_cast<const uint8_t*>(src) + offset, core, reg_addr, register_access_size(width), noc_id);
     });
 }
 

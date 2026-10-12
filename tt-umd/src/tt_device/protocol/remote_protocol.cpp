@@ -29,15 +29,17 @@ void RemoteProtocol::read_data(void* mem_ptr, tt_xy_pair core, uint64_t addr, si
     remote_communication_->read_non_mmio(core, mem_ptr, addr, size);
 }
 
-void RemoteProtocol::write_ctrl(const void* mem_ptr, tt_xy_pair core, uint64_t addr, size_t size, NocId noc_id) {
-    for_each_register_access(addr, size, [&](uint64_t reg_addr, size_t offset) {
-        write_data(static_cast<const uint8_t*>(mem_ptr) + offset, core, reg_addr, sizeof(uint32_t), noc_id);
+void RemoteProtocol::write_ctrl(
+    const void* mem_ptr, tt_xy_pair core, uint64_t addr, size_t size, NocId noc_id, RegisterAccessWidth width) {
+    for_each_register_access(addr, size, width, [&](uint64_t reg_addr, size_t offset) {
+        write_data(static_cast<const uint8_t*>(mem_ptr) + offset, core, reg_addr, register_access_size(width), noc_id);
     });
 }
 
-void RemoteProtocol::read_ctrl(void* mem_ptr, tt_xy_pair core, uint64_t addr, size_t size, NocId noc_id) {
-    for_each_register_access(addr, size, [&](uint64_t reg_addr, size_t offset) {
-        read_data(static_cast<uint8_t*>(mem_ptr) + offset, core, reg_addr, sizeof(uint32_t), noc_id);
+void RemoteProtocol::read_ctrl(
+    void* mem_ptr, tt_xy_pair core, uint64_t addr, size_t size, NocId noc_id, RegisterAccessWidth width) {
+    for_each_register_access(addr, size, width, [&](uint64_t reg_addr, size_t offset) {
+        read_data(static_cast<uint8_t*>(mem_ptr) + offset, core, reg_addr, register_access_size(width), noc_id);
     });
 }
 

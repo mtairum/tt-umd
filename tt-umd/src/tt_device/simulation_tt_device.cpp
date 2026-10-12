@@ -160,16 +160,20 @@ void SimulationTTDevice::read_from_device(void* mem_ptr, CoreCoord core, uint64_
     }
 }
 
-void SimulationTTDevice::read_from_device_reg(void* mem_ptr, CoreCoord core, uint64_t addr, size_t size, NocId noc_id) {
-    for_each_register_access(addr, size, [&](uint64_t reg_addr, size_t offset) {
-        read_from_device(static_cast<uint8_t*>(mem_ptr) + offset, core, reg_addr, sizeof(uint32_t), noc_id);
+void SimulationTTDevice::read_from_device_reg(
+    void* mem_ptr, CoreCoord core, uint64_t addr, size_t size, NocId noc_id, RegisterAccessWidth width) {
+    validate_register_access_width(get_arch(), width);
+    for_each_register_access(addr, size, width, [&](uint64_t reg_addr, size_t offset) {
+        read_from_device(static_cast<uint8_t*>(mem_ptr) + offset, core, reg_addr, register_access_size(width), noc_id);
     });
 }
 
 void SimulationTTDevice::write_to_device_reg(
-    const void* mem_ptr, CoreCoord core, uint64_t addr, size_t size, NocId noc_id) {
-    for_each_register_access(addr, size, [&](uint64_t reg_addr, size_t offset) {
-        write_to_device(static_cast<const uint8_t*>(mem_ptr) + offset, core, reg_addr, sizeof(uint32_t), noc_id);
+    const void* mem_ptr, CoreCoord core, uint64_t addr, size_t size, NocId noc_id, RegisterAccessWidth width) {
+    validate_register_access_width(get_arch(), width);
+    for_each_register_access(addr, size, width, [&](uint64_t reg_addr, size_t offset) {
+        write_to_device(
+            static_cast<const uint8_t*>(mem_ptr) + offset, core, reg_addr, register_access_size(width), noc_id);
     });
 }
 

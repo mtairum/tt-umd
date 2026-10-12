@@ -80,14 +80,22 @@ uint32_t RtlSimTlbWindow::read32(uint64_t offset) {
     return value;
 }
 
+void RtlSimTlbWindow::write64(uint64_t offset, uint64_t value) { translate_and_write(offset, &value, sizeof(value)); }
+
+uint64_t RtlSimTlbWindow::read64(uint64_t offset) {
+    uint64_t value = 0;
+    translate_and_read(offset, &value, sizeof(value));
+    return value;
+}
+
 void RtlSimTlbWindow::write_register(uint64_t offset, const void* data, size_t size) {
-    for_each_register_access(offset, size, [&](uint64_t reg_offset, size_t data_offset) {
+    for_each_register_access(offset, size, RegisterAccessWidth::Bits32, [&](uint64_t reg_offset, size_t data_offset) {
         translate_and_write(reg_offset, static_cast<const uint8_t*>(data) + data_offset, sizeof(uint32_t));
     });
 }
 
 void RtlSimTlbWindow::read_register(uint64_t offset, void* data, size_t size) {
-    for_each_register_access(offset, size, [&](uint64_t reg_offset, size_t data_offset) {
+    for_each_register_access(offset, size, RegisterAccessWidth::Bits32, [&](uint64_t reg_offset, size_t data_offset) {
         translate_and_read(reg_offset, static_cast<uint8_t*>(data) + data_offset, sizeof(uint32_t));
     });
 }
